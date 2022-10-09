@@ -1,5 +1,5 @@
 import json
+from types import SimpleNamespace
 
-def config():
-    with open("config.json", 'r') as fin:
-        return json.load(fin)
+with open("config.json", 'r') as fin:
+    config = json.load(fin, object_hook=lambda d: SimpleNamespace(**d))

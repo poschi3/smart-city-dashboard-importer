@@ -24,90 +24,51 @@ def get_url(org: int, id: int,
     return f"https://www.eco-visio.net/api/aladdin/1.0.0/pbl/publicwebpageplus/data/{id}?{query}"
 
 
+def extract_points(bike, dayin: datetime, interval: int):
+    end_time = dayin.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_time = end_time - timedelta(days=1)
+
+    url = get_url(bike.org, bike.id, start_time, end_time, bike.flows, interval)
+    print(url)
+
+    resp = requests.get(url=url)
+    day = resp.json()
+    number_of_values = len(day)
+
+    time_interval = timedelta(days=1) / number_of_values
+    timeframe = int(time_interval.total_seconds())
+
+    points = []
+    current_time = start_time
+    for datapair in day:
+        print(current_time)
+        count = datapair[1]
+
+        point = Point("bike") \
+            .tag("location", "Kunsthalle") \
+            .tag("timeframe", timeframe) \
+            .field("bikes", int(count)) \
+            .time(current_time, WritePrecision.S)
+
+        points.append(point)
+
+        # After:
+        current_time = current_time + time_interval
+
+    return points
+
+
 bikes = config.bikes
-
-
-for bike in bikes:
-    print(get_url(bike.org, bike.id, datetime.now(), datetime.now(), bike.flows, 3))
-
-
 influxdb = config.influxdb
 
 
 with InfluxDBClient(url=influxdb.server, token=influxdb.token, org=influxdb.org) as client:
-
     write_api = client.write_api(write_options=SYNCHRONOUS)
+    for bike in bikes:
+        # print(get_url(bike.org, bike.id, datetime.now(), datetime.now(), bike.flows, 3))
+        points_3600 = extract_points(bike, datetime(2022, 10, 7), 3)
+        write_api.write(influxdb.bucket, influxdb.org, points_3600)
 
-    today = datetime(2022, 10, 7)
-    yesterday = today - timedelta(days=1)
-
-    dateformat = "%d/%m/%Y"
-    today_string = today.strftime(dateformat)
-    yesterday_string = yesterday.strftime(dateformat)
-
-    # url = f"https://www.eco-visio.net/api/aladdin/1.0.0/pbl/publicwebpageplus/data/100125116?debut={yesterday_string}&fin={today_string}&idOrganisme=4586&idPdc=100125116&interval=3&flowIds=101125116%3B102125116%3B353247560%3B353247561"
-    url = get_url(bike.org, bike.id, yesterday, today, bike.flows, 3)
-    print("first")
-    print(url)
-
-    resp = requests.get(url=url)
-    day = resp.json()
-
-    time = 0
-    points = []
-    for datapair in day:
-        count = datapair[1]
-
-        datatime = yesterday.replace(
-            hour=time, minute=0, second=0, microsecond=0)
-
-        point = Point("bike") \
-            .tag("location", "koenigstorgraben") \
-            .tag("timeframe", "hourly") \
-            .field("bikes", int(count)) \
-            .time(datatime, WritePrecision.NS)
-
-        points.append(point)
-
-        time += 1
-
-        # -------------------
-    print(points)
-    write_api.write(influxdb.bucket, influxdb.org, points)
-
-    # today = datetime.now()
-
-    # yesterday = datetime.today() - timedelta(days=1)
-
-    dateformat = "%d/%m/%Y"
-    today_string = today.strftime(dateformat)
-    yesterday_string = yesterday.strftime(dateformat)
-
-    # url = f"https://www.eco-visio.net/api/aladdin/1.0.0/pbl/publicwebpageplus/data/100125116?debut={yesterday_string}&fin={today_string}&idOrganisme=4586&idPdc=100125116&interval=2&flowIds=101125116%3B102125116%3B353247560%3B353247561"
-    url = get_url(bike.org, bike.id, yesterday, today, bike.flows, 2)
-    print("second")
-    print(url)
-
-    resp = requests.get(url=url)
-    day = resp.json()
-
-    datatime = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-    points = []
-    for datapair in day:
-        count = datapair[1]
-
-        datatime = datatime + timedelta(minutes=15)
-
-        point = Point("bike") \
-            .tag("location", "koenigstorgraben") \
-            .tag("timeframe", "fuzehn") \
-            .field("bikes", int(count)) \
-            .time(datatime, WritePrecision.NS)
-
-        points.append(point)
-
-    print(points)
-    write_api.write(influxdb.bucket, influxdb.org, points)
-
-
-client.close()
+        points_900 = extract_points(bike, datetime(2022, 10, 7), 2)
+        write_api.write(influxdb.bucket, influxdb.org, points_900)
+    client.close()

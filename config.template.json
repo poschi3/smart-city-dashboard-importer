@@ -1,0 +1,8 @@
+{
+    "influxdb": {
+        "server": "https://example.com/",
+        "org": "MyOrg",
+        "bucket": "MyBucket",
+        "token": "secret"
+    }
+}

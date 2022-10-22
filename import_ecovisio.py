@@ -5,11 +5,20 @@ from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 import requests
 from datetime import datetime, timedelta
+from enum import Enum
+
+
+class Interval(Enum):
+    MONTH = 6
+    WEEK = 5
+    DAY = 4
+    HOUR = 3
+    QUARTER_OF_AN_HOUR = 2
 
 
 def get_url(org: int, id: int,
             start: datetime, end: datetime, flows: Iterable['int'],
-            interval: int):
+            interval: Interval):
     dateformat = "%d/%m/%Y"
 
     params = {
@@ -17,37 +26,41 @@ def get_url(org: int, id: int,
         'fin': end.strftime(dateformat),
         'idOrganisme': org,
         'idPdc': id,
-        'interval': interval,
+        'interval': interval.value,
         'flowIds': ';'.join(str(x) for x in flows)
     }
     query = urlencode(params)
     return f"https://www.eco-visio.net/api/aladdin/1.0.0/pbl/publicwebpageplus/data/{id}?{query}"
 
 
-def extract_points(bike, dayin: datetime, interval: int):
-    end_time = dayin.replace(hour=0, minute=0, second=0, microsecond=0)
-    start_time = end_time - timedelta(days=1)
+def extract_points(bikecounter, from_day: datetime, to_day: datetime, interval: Interval):
+    timeframes = {
+        Interval.DAY: 86400,
+        Interval.HOUR: 3600,
+        Interval.QUARTER_OF_AN_HOUR: 900
+    }
 
-    url = get_url(bike.org, bike.id, start_time, end_time, bike.flows, interval)
+    try:
+        timeframe = timeframes[interval]
+    except KeyError:
+        raise ValueError(f"Interval {interval} is not supported")
+
+    url = get_url(bikecounter.org, bikecounter.id, from_day, to_day, bikecounter.flows, interval)
     print(url)
 
-    resp = requests.get(url=url)
-    day = resp.json()
-    number_of_values = len(day)
-
-    time_interval = timedelta(days=1) / number_of_values
-    timeframe = int(time_interval.total_seconds())
+    response = requests.get(url=url).json()
+    print(f"Got {len(response)} values")
 
     points = []
-    current_time = start_time
-    for datapair in day:
-        print(current_time)
+    current_time = from_day.replace(hour=0, minute=0, second=0, microsecond=0)
+    for datapair in response:
+        # print(current_time, datapair[0],  datapair[1])
         count = datapair[1]
 
         point = Point("bikecounter") \
-            .tag("country", bike.country) \
-            .tag("city", bike.city) \
-            .tag("location", bike.location) \
+            .tag("country", bikecounter.country) \
+            .tag("city", bikecounter.city) \
+            .tag("location", bikecounter.location) \
             .tag("timeframe", timeframe) \
             .tag("type", "ecovisio") \
             .field("bikes", int(count)) \
@@ -56,22 +69,25 @@ def extract_points(bike, dayin: datetime, interval: int):
         points.append(point)
 
         # After:
-        current_time = current_time + time_interval
+        current_time = current_time + timedelta(seconds=timeframe)
 
     return points
 
 
-bikes = config.ecovisio
 influxdb = config.influxdb
-
 
 with InfluxDBClient(url=influxdb.server, token=influxdb.token, org=influxdb.org) as client:
     write_api = client.write_api(write_options=SYNCHRONOUS)
-    for bike in bikes:
-        # print(get_url(bike.org, bike.id, datetime.now(), datetime.now(), bike.flows, 3))
-        points_3600 = extract_points(bike, datetime(2022, 10, 7), 3)
+    for bikecounter in config.ecovisio:
+        to_day = datetime.now() + timedelta(days=1)
+        from_day = to_day - timedelta(days=7)
+
+        points_86400 = extract_points(bikecounter, from_day, to_day, Interval.DAY)
+        write_api.write(influxdb.bucket, influxdb.org, points_86400)
+
+        points_3600 = extract_points(bikecounter, from_day, to_day, Interval.HOUR)
         write_api.write(influxdb.bucket, influxdb.org, points_3600)
 
-        points_900 = extract_points(bike, datetime(2022, 10, 7), 2)
+        points_900 = extract_points(bikecounter, from_day, to_day, Interval.QUARTER_OF_AN_HOUR)
         write_api.write(influxdb.bucket, influxdb.org, points_900)
     client.close()

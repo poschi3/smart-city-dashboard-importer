@@ -58,7 +58,7 @@ def extract_points(bike, dayin: datetime, interval: int):
     return points
 
 
-bikes = config.bikes
+bikes = config.ecovisio
 influxdb = config.influxdb
 
 

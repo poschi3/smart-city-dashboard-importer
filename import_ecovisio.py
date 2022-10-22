@@ -46,6 +46,7 @@ def extract_points(bikecounter, from_day: datetime, to_day: datetime, interval: 
         raise ValueError(f"Interval {interval} is not supported")
 
     url = get_url(bikecounter.org, bikecounter.id, from_day, to_day, bikecounter.flows, interval)
+    print(f"Interval {interval}")
     print(url)
 
     response = requests.get(url=url).json()
@@ -79,8 +80,10 @@ influxdb = config.influxdb
 with InfluxDBClient(url=influxdb.server, token=influxdb.token, org=influxdb.org) as client:
     write_api = client.write_api(write_options=SYNCHRONOUS)
     for bikecounter in config.ecovisio:
+        print()
+        print(f"Bikecounter {bikecounter.country}-{bikecounter.city}-{bikecounter.location}")
         to_day = datetime.now() + timedelta(days=1)
-        from_day = to_day - timedelta(days=7)
+        from_day = to_day - timedelta(days=40)
 
         points_86400 = extract_points(bikecounter, from_day, to_day, Interval.DAY)
         write_api.write(influxdb.bucket, influxdb.org, points_86400)

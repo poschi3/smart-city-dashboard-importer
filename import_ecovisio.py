@@ -44,9 +44,12 @@ def extract_points(bike, dayin: datetime, interval: int):
         print(current_time)
         count = datapair[1]
 
-        point = Point("bike") \
-            .tag("location", "Kunsthalle") \
+        point = Point("bikecounter") \
+            .tag("country", bike.country) \
+            .tag("city", bike.city) \
+            .tag("location", bike.location) \
             .tag("timeframe", timeframe) \
+            .tag("type", "ecovisio") \
             .field("bikes", int(count)) \
             .time(current_time, WritePrecision.S)
 

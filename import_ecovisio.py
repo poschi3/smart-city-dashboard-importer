@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from config import config
 from typing import Iterable
 from urllib.parse import urlencode

@@ -52,10 +52,15 @@ def extract_points(bikecounter, from_day: datetime, to_day: datetime, interval: 
     print(url)
 
     response = requests.get(url=url).json()
-    print(f"Got {len(response)} values")
+    if len(response) <= 0:
+        print("No values found")
+        return
 
+    print(f"Got {len(response)} values")
+    first_date_in_data = response[0][0]
+
+    current_time = datetime.strptime(first_date_in_data, "%m/%d/%Y")
     points = []
-    current_time = from_day.replace(hour=0, minute=0, second=0, microsecond=0)
     for datapair in response:
         # print(current_time, datapair[0],  datapair[1])
         count = datapair[1]
